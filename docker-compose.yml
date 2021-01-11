@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  app:
+    container_name: offers
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      - POSTGRES_DB=offers_db
+      - POSTGRES_USER=offers_user
+      - POSTGRES_PASSWORD=pass
+
+  # Redis Service
+  postgres:
+    container_name: offers-postgres
+    restart: always
+    image: postgres:12
+    volumes:
+      - ./db/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
+    environment:
+      - POSTGRES_DB=offers_db
+      - POSTGRES_USER=offers_user
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - "5432:5434"
