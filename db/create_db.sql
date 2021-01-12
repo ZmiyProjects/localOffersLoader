@@ -98,6 +98,7 @@ FROM offers.Seller AS S
                WHEN _offer_name IS NOT NULL THEN ' AND offer_name'  || CASE WHEN _ignore_register = TRUE THEN ' ILIKE ' ELSE ' LIKE '
 END || quote_literal('%' || _offer_name || '%')
                ELSE ''
+|| 'ORDER BY offer_name'
 END;
 END;
 $$

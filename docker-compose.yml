@@ -28,4 +28,4 @@ services:
       - POSTGRES_USER=offers_user
       - POSTGRES_PASSWORD=pass
     ports:
-      - "5432:5434"
+      - "5432:5432"

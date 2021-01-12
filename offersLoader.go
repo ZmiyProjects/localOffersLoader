@@ -24,6 +24,7 @@ type Seller struct {
 	SellerName string `json:"seller_name"`
 }
 
+// базовая структура для товаров
 type Offer struct {
 	OfferId int `json:"offer_id"`
 	Name string `json:"offer_name"`
@@ -31,11 +32,13 @@ type Offer struct {
 	Quantity int `json:"quantity"`
 }
 
+// структура для сериализации товаров в json для возвращения клиенту
 type OutputOffer struct {
 	Offer
 	SellerData Seller `json:"seller"`
 }
 
+// структура для загрузки товаров из excel
 type ExcelOffer struct {
 	Offer
 	SellerId int `json:"seller_id"`
@@ -54,6 +57,7 @@ type Task struct {
 	SellerData Seller `json:"seller"`
 }
 
+// структура для получения входных данных обработчика /offers/search
 type SearchOffer struct {
 	OfferId *int `json:"offer_id"`
 	OfferName *string `json:"offer_name"`
@@ -61,6 +65,7 @@ type SearchOffer struct {
 	IgnoreRegister *bool `json:"ignore_register"`
 }
 
+// Отправить клиенты сообщение о возникшей ошибке
 func sendErrorMessage(w http.ResponseWriter, messageText string, statusCode int) {
 	errorMessage := map[string]string{"message": messageText}
 	w.WriteHeader(statusCode)
@@ -70,6 +75,7 @@ func sendErrorMessage(w http.ResponseWriter, messageText string, statusCode int)
 	}
 }
 
+// Извлечение данных из строки excel файла
 func OfferFromRow(row *xlsx.Row) (*ExcelOffer, error) {
 	OfferId, err := row.GetCell(0).Int()
 	if err != nil {
@@ -111,6 +117,7 @@ func OfferFromRow(row *xlsx.Row) (*ExcelOffer, error) {
 	return &offer, nil
 }
 
+// Изменить статус задачи на "Ошибка"
 func taskSetError(db *sql.DB, taskId int) error {
 	query := "UPDATE offers.Task SET finish_date = CURRENT_TIMESTAMP, status = 'Ошибка' WHERE task_id = $1"
 	stmt, err := db.Prepare(query)
@@ -125,12 +132,12 @@ func taskSetError(db *sql.DB, taskId int) error {
 	return nil
 }
 
+// открытие excel файла для чтения
 func readExcelFile(db* sql.DB, buf* bytes.Buffer, sellerId int, taskId int) {
 	errorCounter := 0
 	var offers []ExcelOffer
 	wb, err := xlsx.OpenBinary(buf.Bytes())
 	if err != nil {
-		log.Println("3333333")
 		if err = taskSetError(db, taskId); err != nil {
 			log.Fatal(err.Error())
 		}
@@ -258,17 +265,20 @@ func createSeller(w http.ResponseWriter, r *http.Request) {
 	var sellerId int
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		panic(err.Error())
+		sendErrorMessage(w, "внутренняя ошибка сервера", http.StatusInternalServerError)
+		return
 	}
 	keyVal := make(map[string]string)
 	err = json.Unmarshal(body, &keyVal)
 	if err != nil {
-		log.Fatal(err.Error())
+		sendErrorMessage(w, "некорректные входные данные, на входе ожидается JSON", http.StatusBadRequest)
+		return
 	}
 	sellerName := keyVal["seller_name"]
 	sellerNamePattern, err := regexp.Compile("^[а-яА-Яa-zA-Z]")
 	if err != nil {
-		log.Fatal(err.Error())
+		sendErrorMessage(w, "внутренняя ошибка сервера", http.StatusInternalServerError)
+		return
 	}
 
 	if sellerNamePattern.MatchString(sellerName) {
@@ -316,7 +326,7 @@ func createSeller(w http.ResponseWriter, r *http.Request) {
 func getAllSellers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	sellers := make([]Seller, 0, 0)
-	result, err := db.Query("SELECT seller_id, seller_name FROM offers.seller;")
+	result, err := db.Query("SELECT seller_id, seller_name FROM offers.seller ORDER BY created_at;")
 	if err != nil {
 		panic(err.Error())
 	}

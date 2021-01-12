@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+
 func postSeller(url, data string) (int, string, error) {
 	r, err := http.Post(url, "application/json", strings.NewReader(data))
 	if err != nil {
@@ -100,6 +101,18 @@ func TestCreateSellerEmptyName(t *testing.T) {
 	assert.Equal(t, expected, data)
 }
 
+// Проверка некорректных данных на входе -- поступил не JSON
+func TestCreateSellerNoJsonInput(t *testing.T) {
+	statusCode, data, err := postSeller("http://0.0.0.0:8080/sellers", ``)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	expected := `{"message":"некорректные входные данные, на входе ожидается JSON"}`
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, expected, data)
+}
+
 func TestGetSeller(t *testing.T) {
 	r, err := http.Get("http://0.0.0.0:8080/sellers/1")
 	if err != nil {
@@ -114,6 +127,23 @@ func TestGetSeller(t *testing.T) {
 	expected := `{"seller_id":1,"seller_name":"Первый"}`
 	data := strings.Trim(string(body), "\n")
 	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.Equal(t, expected, data)
+}
+
+func TestGetSellerUnExists(t *testing.T) {
+	r, err := http.Get("http://0.0.0.0:8080/sellers/5")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	expected := `{"message":"Продавец с указанным SellerId не существует!"}`
+	data := strings.Trim(string(body), "\n")
+	assert.Equal(t, http.StatusBadRequest, r.StatusCode)
 	assert.Equal(t, expected, data)
 }
 
@@ -202,6 +232,18 @@ func TestUpdateFirstExcel(t *testing.T) {
 	assert.Equal(t, expected, data)
 }
 
+// Попытка загрузка товаров для несуществующего пользователя
+func TestLoadOffersUnExistedSeller(t *testing.T) {
+	statusCode, data, err := postOffers("http://0.0.0.0:8080/sellers/9/offers/load", "excel/firstUpdate.xlsx", "firstUpdate.xlsx", "data")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	expected := `{"message":"Продавец с указанным SellerId не существует!"}`
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, expected, data)
+}
+
 func TestSearchOffersByText(t *testing.T) {
 	client := &http.Client{}
 	time.Sleep(1 * time.Second)
@@ -257,7 +299,7 @@ func TestSearchOffersById(t *testing.T) {
 	assert.Equal(t, expected, data)
 }
 
-func TestGetTask(t *testing.T) {
+func TestGetFirstTask(t *testing.T) {
 	r, err := http.Get("http://0.0.0.0:8080/tasks/1")
 	if err != nil {
 		log.Fatal(err.Error())
@@ -272,23 +314,195 @@ func TestGetTask(t *testing.T) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	expectedSeller := Seller{
+		SellerName: "Первый",
+		SellerId: 1,
+	}
 
-	//data := strings.Trim(string(body), "\n")
 	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.Equal(t, "Завершен", task.Status)
 	assert.Equal(t, 1, *task.NumErrors)
 	assert.Equal(t, 4, *task.NumCreated)
 	assert.Equal(t, 0, *task.NumUpdated)
 	assert.Equal(t, 0, *task.NumDeleted)
+	assert.Equal(t, expectedSeller, task.SellerData)
 }
 
-//type Task struct {
-//	TaskId int `json:"task_id"`
-//	StartDate string `json:"start_date"`
-//	FinishDate *string `json:"finish_date"`
-//	Status string `json:"status"`
-//	NumErrors *int `json:"num_errors"`
-//	NumCreated *int `json:"num_created"`
-//	NumUpdated *int `json:"num_updated"`
-//	NumDeleted *int `json:"num_deleted"`
-//	SellerData Seller `json:"seller"`
-//}
+func TestGetSecondTask(t *testing.T) {
+	r, err := http.Get("http://0.0.0.0:8080/tasks/2")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	var task Task
+	err = json.Unmarshal(body, &task)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	expectedSeller := Seller{
+		SellerName: "Второй",
+		SellerId: 2,
+	}
+
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.Equal(t, "Завершен", task.Status)
+	assert.Equal(t, 3, *task.NumErrors)
+	assert.Equal(t, 2, *task.NumCreated)
+	assert.Equal(t, 0, *task.NumUpdated)
+	assert.Equal(t, 0, *task.NumDeleted)
+	assert.Equal(t, expectedSeller, task.SellerData)
+}
+
+func TestGetThirdTask(t *testing.T) {
+	r, err := http.Get("http://0.0.0.0:8080/tasks/3")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	expectedSeller := Seller{
+		SellerName: "Первый",
+		SellerId: 1,
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	var task Task
+	err = json.Unmarshal(body, &task)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.Equal(t, "Завершен", task.Status)
+	assert.Equal(t, 0, *task.NumErrors)
+	assert.Equal(t, 0, *task.NumCreated)
+	assert.Equal(t, 2, *task.NumUpdated)
+	assert.Equal(t, 2, *task.NumDeleted)
+	assert.Equal(t, expectedSeller, task.SellerData)
+}
+
+func TestGetTaskUnExists(t *testing.T) {
+	r, err := http.Get("http://0.0.0.0:8080/tasks/10")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	expected := `{"message":"Отсутствует задача с указанным TaskId!"}`
+	data := strings.Trim(string(body), "\n")
+	assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	assert.Equal(t, expected, data)
+}
+
+func TestGetEmptyExcelTask(t *testing.T) {
+	statusCode, data, err := postOffers("http://0.0.0.0:8080/sellers/1/offers/load", "excel/empty.xlsx", "empty.xlsx", "data")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	expected := `{"task_id":4}`
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, expected, data)
+
+	time.Sleep(250 * time.Millisecond)
+
+	r, err := http.Get("http://0.0.0.0:8080/tasks/4")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	expectedSeller := Seller{
+		SellerName: "Первый",
+		SellerId: 1,
+	}
+
+	var task Task
+	err = json.Unmarshal(body, &task)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.Equal(t, "Ошибка", task.Status)
+	assert.Nil(t, task.NumErrors)
+	assert.Nil(t, task.NumCreated)
+	assert.Nil(t, task.NumUpdated)
+	assert.Nil(t, task.NumDeleted)
+	assert.Equal(t, expectedSeller, task.SellerData)
+}
+
+func TestGetInvalidFormatTask(t *testing.T) {
+	statusCode, data, err := postOffers("http://0.0.0.0:8080/sellers/1/offers/load", "excel/invalid.txt", "invalid.txt", "data")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	expected := `{"task_id":5}`
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, expected, data)
+
+	time.Sleep(250 * time.Millisecond)
+
+	r, err := http.Get("http://0.0.0.0:8080/tasks/5")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	expectedSeller := Seller{
+		SellerName: "Первый",
+		SellerId: 1,
+	}
+
+	var task Task
+	err = json.Unmarshal(body, &task)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.Equal(t, "Ошибка", task.Status)
+	assert.Nil(t, task.NumErrors)
+	assert.Nil(t, task.NumCreated)
+	assert.Nil(t, task.NumUpdated)
+	assert.Nil(t, task.NumDeleted)
+	assert.Equal(t, expectedSeller, task.SellerData)
+}
+
+func TestGetAllTasks(t *testing.T) {
+	r, err := http.Get("http://0.0.0.0:8080/tasks")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	var data map[string][]Task
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	tasks, ok := data["tasks"]
+	assert.Equal(t, true, ok)
+	assert.Equal(t, 5, len(tasks))
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+}
